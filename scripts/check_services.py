@@ -7,8 +7,8 @@ def check_ollama():
     print("⏳ Проверка Ollama...", end=" ")
     try:
         # Проверка доступности API
-        r = requests.get("http://localhost:11434/")
-        if r.status_code == 200:
+        r = requests.get("http://localhost:11434/", timeout=30)
+        if r.status_code == 200:  # noqa: PLR2004
             print("✅ OK")
         else:
             print(f"❌ Ошибка: статус {r.status_code}")
@@ -16,7 +16,7 @@ def check_ollama():
 
         # Проверка наличия модели mistral:7b
         print("⏳ Проверка модели mistral:7b...", end=" ")
-        r = requests.get("http://localhost:11434/api/tags")
+        r = requests.get("http://localhost:11434/api/tags", timeout=30)
         models = [m["name"] for m in r.json()["models"]]
 
         # Ollama может вернуть 'mistral:7b' или 'mistral:7b-instruct' и т.д.
@@ -36,8 +36,8 @@ def check_ollama():
 def check_qdrant():
     print("⏳ Проверка Qdrant...", end=" ")
     try:
-        r = requests.get("http://localhost:6333/collections")
-        if r.status_code == 200:
+        r = requests.get("http://localhost:6333/collections", timeout=30)
+        if r.status_code == 200:  # noqa: PLR2004
             print(f"✅ OK (Коллекций: {len(r.json()['result']['collections'])})")
             return True
         print(f"❌ Ошибка: статус {r.status_code}")
