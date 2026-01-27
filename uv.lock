@@ -2668,6 +2668,7 @@ dependencies = [
     { name = "pandas" },
     { name = "python-dotenv" },
     { name = "qdrant-client" },
+    { name = "requests" },
     { name = "sentence-transformers" },
 ]
 
@@ -2684,6 +2685,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=3.0.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "qdrant-client", specifier = ">=1.16.2" },
+    { name = "requests", specifier = ">=2.32.5" },
     { name = "sentence-transformers", specifier = ">=5.2.0" },
 ]
 
