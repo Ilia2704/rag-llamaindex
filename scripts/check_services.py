@@ -2,6 +2,8 @@ import sys
 
 import requests
 
+MODEL_NAME = "hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M"
+
 
 def check_ollama():
     print("⏳ Проверка Ollama...", end=" ")
@@ -14,18 +16,18 @@ def check_ollama():
             print(f"❌ Ошибка: статус {r.status_code}")
             return False
 
-        # Проверка наличия модели mistral:7b
-        print("⏳ Проверка модели mistral:7b...", end=" ")
+        # Проверка наличия локальной Ollama-модели
+        print(f"⏳ Проверка модели {MODEL_NAME}...", end=" ")
         r = requests.get("http://localhost:11434/api/tags", timeout=30)
         models = [m["name"] for m in r.json()["models"]]
 
-        # Ollama может вернуть 'mistral:7b' или 'mistral:7b-instruct' и т.д.
+        # Ollama может вернуть точное имя или вариант с дополнительным суффиксом.
         # Ищем вхождение строки
-        if any("mistral:7b" in m for m in models):
+        if any(MODEL_NAME in m for m in models):
             print("✅ Модель найдена")
             return True
         print(f"❌ Модель не найдена. Доступные: {models}")
-        print("👉 Выполните: docker exec -it rag_ollama ollama pull mistral:7b")
+        print(f"👉 Выполните: ollama pull {MODEL_NAME}")
         return False
 
     except Exception as e:

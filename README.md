@@ -4,17 +4,18 @@
 
 ## Стек технологий
 
-*   **LLM:** Mistral 7B (через Ollama)
+*   **LLM:** Qwen3 4B Q4_K_M (через Ollama)
 *   **Vector DB:** Qdrant
-*   **Embeddings:** BAAI/bge-m3
-*   **Framework:** LangChain, uv
+*   **Embeddings:** sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+*   **Framework:** LangChain, LlamaIndex, uv
 
 ## Быстрый старт
 
 ### 1. Предварительные требования
 *   Установленный [Docker](https://www.docker.com/) и Docker Compose.
+*   Установленная локально [Ollama](https://ollama.com/) (на macOS запускается как приложение/сервис на хосте).
 *   Установленный [uv](https://github.com/astral-sh/uv) (современный менеджер пакетов Python).
-*   Желательно: GPU (NVIDIA) для ускорения работы локальных моделей.
+*   Для Apple Silicon Ollama использует Metal-ускорение при локальном запуске на хосте.
 
 ### 2. Установка окружения
 
@@ -30,18 +31,17 @@ uv sync
 
 ### 3. Запуск инфраструктуры
 
-Поднимаем Ollama и Qdrant в контейнерах:
+Ollama запускается локально на хосте и должна быть доступна на `http://localhost:11434`.
+Скачайте модель Qwen3 4B Q4_K_M, если она еще не установлена:
+
+```bash
+ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M
+```
+
+В Docker поднимаем только Qdrant:
 
 ```bash
 docker compose up -d
-```
-
-> **Важно:** При первом запуске Ollama начнет скачивать модель Mistral 7B (~4GB).
-> Проверить статус загрузки можно командой: `docker logs -f rag_ollama`
-
-Скачайте модель, если она не подтянулась автоматически:
-```bash
-docker exec -it rag_ollama ollama pull mistral:7b
 ```
 
 Проверьте, что все сервисы доступны:
@@ -62,13 +62,25 @@ uv run scripts/generate_data.py
 
 Откройте ноутбук `notebooks/rag_workshop.ipynb` и следуйте инструкциям внутри.
 
+### 6. Альтернативное демо на LlamaIndex
+
+В папке `llamaindex/` есть отдельная реализация RAG поверх тех же документов, но через LlamaIndex:
+
+```bash
+uv run python llamaindex/rag_llamaindex_demo.py check
+uv run python llamaindex/rag_llamaindex_demo.py index
+uv run python llamaindex/rag_llamaindex_demo.py demo
+```
+
+Подробная инструкция: `llamaindex/README.md`.
+
 ## Сценарий практики
 
 1.  **Ingestion:** Загрузка документов и извлечение метаданных (Год, Категория).
 2.  **Indexing:** Настройка HNSW индекса в Qdrant вручную.
 3.  **Naive Search:** Почему простой векторный поиск находит устаревшие документы?
 4.  **Advanced Search:** Применение фильтров (`Metadata Filtering`) для отсечения неактуальной информации.
-5.  **RAG Generation:** Генерация ответа с помощью Mistral 7B.
+5.  **RAG Generation:** Генерация ответа с помощью Qwen3 4B.
 6.  **Evaluation:** Использование паттерна "LLM-as-a-Judge" для оценки качества ответа.
 
 ---

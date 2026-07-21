@@ -9,7 +9,7 @@ from langchain_ollama import ChatOllama
 COMPANY_NAME = "РобоТех"
 TARGET_FILE_COUNT = 30
 DATA_DIR = Path("data/knowledge_base")
-MODEL_NAME = "mistral:7b"
+MODEL_NAME = "hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M"
 
 # Инициализация LLM
 print(f"⏳ Инициализация модели {MODEL_NAME}...")

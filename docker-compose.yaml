@@ -1,20 +1,4 @@
 services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: rag_ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_storage:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    restart: always
-
   qdrant:
     image: qdrant/qdrant:latest
     container_name: rag_qdrant
@@ -28,5 +12,4 @@ services:
     restart: always
 
 volumes:
-  ollama_storage:
   qdrant_storage:
