@@ -27,10 +27,12 @@ from qdrant_client import QdrantClient
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data" / "knowledge_base"
 QDRANT_URL = "http://localhost:6333"
+QDRANT_SERVER_VERSION = "1.16.2"
 OLLAMA_URL = "http://localhost:11434"
 COLLECTION_NAME = "robotex_docs_llamaindex"
-LLM_MODEL = "hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M"
-EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+LLM_MODEL = "hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M"
+EMBEDDING_MODEL = "BAAI/bge-m3"
+LLM_REQUEST_TIMEOUT = 600.0
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 
@@ -66,6 +68,28 @@ def select_device() -> str:
     return "cpu"
 
 
+def parse_frontmatter(content: str) -> tuple[dict[str, object], str]:
+    if not content.startswith("---\n"):
+        return {}, content
+
+    try:
+        _, raw_meta, body = content.split("---", maxsplit=2)
+    except ValueError:
+        return {}, content
+
+    metadata: dict[str, object] = {}
+    for line in raw_meta.splitlines():
+        if not line.strip() or ":" not in line:
+            continue
+        key, value = line.split(":", maxsplit=1)
+        value = value.strip().strip('"')
+        if value.isdigit():
+            metadata[key.strip()] = int(value)
+        else:
+            metadata[key.strip()] = value
+    return metadata, body.lstrip()
+
+
 def infer_metadata(path: Path, content: str) -> dict[str, object]:
     years = re.findall(r"202[4-6]", content)
     filename = path.name
@@ -79,35 +103,44 @@ def infer_metadata(path: Path, content: str) -> dict[str, object]:
     else:
         category = "General"
 
-    return {
+    metadata: dict[str, object] = {
         "source": str(path.relative_to(PROJECT_ROOT)),
         "filename": filename,
         "year": int(years[0]) if years else 2026,
         "category": category,
     }
+    return metadata
+
+
+def markdown_paths(data_dir: Path = DATA_DIR) -> list[Path]:
+    paths: list[Path] = []
+    if data_dir.exists():
+        paths.extend(sorted(data_dir.glob("*.md")))
+    return paths
 
 
 def load_documents(data_dir: Path = DATA_DIR) -> list[Document]:
-    if not data_dir.exists():
+    paths = markdown_paths(data_dir)
+    if not paths:
         raise FileNotFoundError(
-            f"Не найдена папка {data_dir}. Сначала выполните: "
-            "uv run scripts/generate_data.py"
+            f"Не найдены markdown-документы в {data_dir}. "
+            "Проверьте, что корпус документов есть в репозитории."
         )
 
     documents: list[Document] = []
-    for path in sorted(data_dir.glob("*.md")):
-        content = path.read_text(encoding="utf-8")
+    for path in paths:
+        raw_content = path.read_text(encoding="utf-8")
+        frontmatter, content = parse_frontmatter(raw_content)
+        metadata = infer_metadata(path, content)
+        metadata.update(frontmatter)
         documents.append(
             # Document: исходный файл + metadata до разбиения на ноды.
             Document(
                 text=content,
-                metadata=infer_metadata(path, content),
+                metadata=metadata,
                 id_=str(path.relative_to(PROJECT_ROOT)),
             )
         )
-
-    if not documents:
-        raise FileNotFoundError(f"В {data_dir} нет markdown-файлов.")
 
     return documents
 
@@ -147,23 +180,38 @@ def check_qdrant() -> bool:
         response.raise_for_status()
         count = len(response.json()["result"]["collections"])
         print(f"OK, коллекций: {count}")
+        version_response = requests.get(f"{QDRANT_URL}/", timeout=10)
+        version_response.raise_for_status()
+        version = version_response.json().get("version")
+        if version != QDRANT_SERVER_VERSION:
+            print(
+                "Версия Qdrant отличается от qdrant-client: "
+                f"server={version}, expected={QDRANT_SERVER_VERSION}"
+            )
+            print("Пересоздайте контейнеры: docker compose down -v && docker compose up -d")
+            return False
+        print(f"Версия Qdrant: {version}")
         return True
     except Exception as exc:
         print(f"ошибка: {exc}")
         return False
 
 
-def configure_settings(model: str = LLM_MODEL) -> None:
+def configure_settings(
+    model: str = LLM_MODEL,
+    request_timeout: float = LLM_REQUEST_TIMEOUT,
+) -> None:
     device = select_device()
     print(f"Embedding model: {EMBEDDING_MODEL} on {device}")
     print(f"LLM via LlamaIndex: {model} at {OLLAMA_URL}")
+    print(f"LLM request timeout: {request_timeout:.0f}s")
 
     # Settings задает основные LlamaIndex-компоненты для текущего процесса.
     Settings.llm = Ollama(
         model=model,
         base_url=OLLAMA_URL,
         temperature=0.1,
-        request_timeout=180.0,
+        request_timeout=request_timeout,
     )
     Settings.embed_model = HuggingFaceEmbedding(
         model_name=EMBEDDING_MODEL,

@@ -4,9 +4,9 @@
 
 ## Стек технологий
 
-*   **LLM:** Qwen3 4B Q4_K_M (через Ollama)
+*   **LLM:** Qwen3 8B Q4_K_M (через Ollama)
 *   **Vector DB:** Qdrant
-*   **Embeddings:** sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+*   **Embeddings:** BAAI/bge-m3
 *   **Framework:** LangChain, LlamaIndex, uv
 
 ## Быстрый старт
@@ -32,10 +32,10 @@ uv sync
 ### 3. Запуск инфраструктуры
 
 Ollama запускается локально на хосте и должна быть доступна на `http://localhost:11434`.
-Скачайте модель Qwen3 4B Q4_K_M, если она еще не установлена:
+Скачайте модель Qwen3 8B Q4_K_M, если она еще не установлена:
 
 ```bash
-ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M
+ollama pull hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M
 ```
 
 В Docker поднимаем только Qdrant:
@@ -44,19 +44,17 @@ ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M
 docker compose up -d
 ```
 
+Версия Qdrant закреплена как `qdrant/qdrant:v1.16.2`, чтобы совпадать с `qdrant-client==1.16.2`.
+
 Проверьте, что все сервисы доступны:
 ```bash
 uv run scripts/check_services.py
 ```
 
-### 4. Генерация данных
+### 4. Корпус документов
 
-Мы будем работать с документацией вымышленной корпорации "РобоТех". Сгенерируйте датасет с помощью LLM:
-
-```bash
-uv run scripts/generate_data.py
-```
-*Это создаст 30 markdown-файлов в папке `data/knowledge_base`.*
+Мы будем работать с уже подготовленной базой знаний вымышленной корпорации "РобоТех".
+Документы лежат в `data/knowledge_base` и входят в репозиторий.
 
 ### 5. Запуск воркшопа
 
@@ -72,6 +70,15 @@ uv run python llamaindex/rag_llamaindex_demo.py index
 uv run python llamaindex/rag_llamaindex_demo.py demo
 ```
 
+Там же есть расширенное демо:
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py index-hybrid
+uv run python llamaindex/advanced_rag_llamaindex_demo.py compare-filters "Какие правила удаленной работы?"
+uv run python llamaindex/advanced_rag_llamaindex_demo.py compare-hybrid "Что означает ZTA-17 и кто отвечает за внедрение?"
+uv run python llamaindex/advanced_rag_llamaindex_demo.py rerank "Кто отвечает за проект Atlas и какие системы он использует?"
+```
+
 Подробная инструкция: `llamaindex/README.md`.
 
 ## Сценарий практики
@@ -80,7 +87,7 @@ uv run python llamaindex/rag_llamaindex_demo.py demo
 2.  **Indexing:** Настройка HNSW индекса в Qdrant вручную.
 3.  **Naive Search:** Почему простой векторный поиск находит устаревшие документы?
 4.  **Advanced Search:** Применение фильтров (`Metadata Filtering`) для отсечения неактуальной информации.
-5.  **RAG Generation:** Генерация ответа с помощью Qwen3 4B.
+5.  **RAG Generation:** Генерация ответа с помощью Qwen3 8B.
 6.  **Evaluation:** Использование паттерна "LLM-as-a-Judge" для оценки качества ответа.
 
 ---

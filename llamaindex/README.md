@@ -8,7 +8,7 @@
 - загрузка текущих markdown-документов РобоТех;
 - извлечение metadata `source`, `filename`, `year`, `category`;
 - разбиение документов на чанки размером `1000` с overlap `200`;
-- embedding через `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` в LlamaIndex;
+- embedding через `BAAI/bge-m3` в LlamaIndex;
 - хранение векторов в отдельной Qdrant-коллекции `robotex_docs_llamaindex`;
 - локальная LLM через `llama_index.llms.ollama.Ollama`;
 - naive retrieval без фильтра;
@@ -29,7 +29,7 @@ cd /Users/newuser/Documents/repo/rag-engineering-workshop
 1. Проверьте, что Ollama запущена и модель скачана:
 
 ```bash
-ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M
+ollama pull hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M
 ```
 
 2. Поднимите Qdrant:
@@ -44,11 +44,7 @@ docker compose up -d
 uv sync
 ```
 
-4. Если документов еще нет, сгенерируйте их текущим скриптом проекта:
-
-```bash
-uv run scripts/generate_data.py
-```
+4. Проверьте, что корпус документов есть в `data/knowledge_base`.
 
 ## Проверка сервисов
 
@@ -59,7 +55,7 @@ uv run python llamaindex/rag_llamaindex_demo.py check
 Проверяется:
 
 - `http://localhost:11434/` отвечает;
-- в Ollama есть `hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M`;
+- в Ollama есть `hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M`;
 - `http://localhost:6333/collections` отвечает.
 
 ## Проверка текущих документов
@@ -161,7 +157,7 @@ uv run python llamaindex/rag_llamaindex_demo.py demo
 
 ## Замена модели
 
-По умолчанию используется `hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M`. Можно передать другую локальную модель Ollama:
+По умолчанию используется `hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M`. Можно передать другую локальную модель Ollama:
 
 ```bash
 uv run python llamaindex/rag_llamaindex_demo.py --model llama3.1:8b query "Какие правила удаленной работы?"
@@ -176,8 +172,163 @@ ollama pull llama3.1:8b
 ## Как это сопоставляется с текущим LangChain notebook
 
 - `data/knowledge_base/*.md` используются те же.
-- `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` используется та же embedding-модель.
-- `hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M` используется та же локальная генеративная модель.
+- `BAAI/bge-m3` используется та же embedding-модель.
+- `hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M` используется та же локальная генеративная модель.
 - Qdrant используется тот же локальный сервис.
 - Коллекция другая: `robotex_docs_llamaindex`, чтобы не пересекаться с `robotex_docs` из notebook.
 - Фильтр в LlamaIndex задается через `MetadataFilters`, а не через `qdrant_client.http.models.Filter`.
+
+## Расширенное демо: Filters + Hybrid + Rerank + Graph
+
+Файл `advanced_rag_llamaindex_demo.py` развивает базовый пример и показывает четыре production-приема:
+
+- `MetadataFilters`: ограничение поиска годом, категорией и другими metadata;
+- `Hybrid Search`: dense-векторы `BAAI/bge-m3` + sparse BM25-сигнал в Qdrant;
+- `Cross-Encoder Reranking`: повторное ранжирование найденных кандидатов;
+- `Graph Retrieval`: ручной property graph в Neo4j поверх тех же документов.
+
+Для наглядности в `data/knowledge_base/` лежат документы из нескольких доменов: HR, IT Security, Procurement, Projects и общие корпоративные инструкции.
+
+### Важное про пересборку индексов
+
+Embedding-модель снова `BAAI/bge-m3`, размерность вектора `1024`. Если раньше индекс строился на MiniLM с размерностью `384`, коллекции нужно пересоздать:
+
+```bash
+uv run python llamaindex/rag_llamaindex_demo.py index --reset
+uv run python llamaindex/advanced_rag_llamaindex_demo.py index-hybrid --reset
+```
+
+### Подготовка расширенного демо
+
+```bash
+ollama pull hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M
+uv sync
+docker compose up -d
+```
+
+Qdrant закреплен на `qdrant/qdrant:v1.16.2`, потому что Python-клиент закреплен как `qdrant-client==1.16.2`.
+Если раньше был поднят `qdrant/qdrant:latest`, пересоздайте контейнер и volume:
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+Проверка:
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py check
+```
+
+### Metadata filtering
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py compare-filters "Какие правила удаленной работы?"
+```
+
+Команда выводит три блока:
+
+1. поиск без фильтра;
+2. намеренно неверный архивный срез `year=2024`;
+3. актуальный срез `year=2026 + category=HR`.
+
+Так видно, почему фильтр нужен не для красоты, а для отсечения устаревших правил.
+
+### Hybrid Search
+
+Сначала создайте hybrid-коллекцию:
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py index-hybrid
+```
+
+Затем сравните dense и hybrid retrieval:
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py compare-hybrid "Что означает ZTA-17 и кто отвечает за внедрение?"
+```
+
+Dense retrieval ищет по смысловой близости. Hybrid retrieval добавляет sparse BM25-сигнал, поэтому лучше цепляется за точные коды вроде `ZTA-17`, `HR-REMOTE-2026`, `PR-4421-M2-16`.
+
+### Cross-Encoder Reranking
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py rerank "Кто отвечает за проект Atlas и какие системы он использует?"
+```
+
+Команда сначала показывает top-8 кандидатов из hybrid retrieval, затем показывает top-3 после cross-encoder reranking.
+
+Полный RAG с hybrid retrieval и rerank:
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py query-hybrid-rerank "Кто отвечает за проект Atlas и какие системы он использует?"
+```
+
+### Graph Retrieval: Neo4j manual property graph
+
+Neo4j добавлен в `docker-compose.yaml` как optional profile, поэтому обычный Qdrant-запуск не меняется.
+Образ закреплен как `neo4j:5.26.28-community`. Точная фиксация здесь нужна для воспроизводимости Docker-окружения; предупреждение о несовместимости относилось к Qdrant, поэтому Qdrant закреплен отдельно как `qdrant/qdrant:v1.16.2` под `qdrant-client==1.16.2`.
+
+Запуск Neo4j:
+
+```bash
+docker compose --profile graph up -d neo4j
+```
+
+Проверка Neo4j:
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py graph-check
+```
+
+Быстрое заполнение Neo4j ручным graph seed из текущих документов:
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py graph-seed --reset
+```
+
+Эта команда создает:
+
+- `Document` ноды для всех markdown-файлов;
+- `Chunk` ноды, похожие на LlamaIndex `TextNode`;
+- `Person`, `Team`, `Project`, `Policy`, `System`, `Technology` и другие entity-ноды;
+- связи `HAS_CHUNK`, `MENTIONS`, `OWNS`, `LEADS`, `USES`, `FOLLOWS`, `SUPERSEDES`.
+
+Граф заполняется вручную через официальный Python driver `neo4j`, а не через LlamaIndex Neo4j connector. Это сделано специально для демо: LLM-based extraction через `PropertyGraphIndex` на локальной Qwen3 8B оказался слишком долгим и нестабильным по памяти на MacBook Air M2. Ручной seed делает граф воспроизводимым: одни и те же документы дают одни и те же ноды, связи и цвета в Neo4j Browser.
+
+Проверить статистику:
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py graph-stats
+```
+
+Найти paths по свойствам нод:
+
+```bash
+uv run python llamaindex/advanced_rag_llamaindex_demo.py graph-search Atlas
+```
+
+В Neo4j Browser удобно начать с:
+
+```cypher
+MATCH (n)-[r]->(m)
+WHERE n.graph_node = true AND m.graph_node = true
+RETURN n, r, m
+LIMIT 150
+```
+
+Для Atlas:
+
+```cypher
+MATCH p=(n)-[r*1..2]-(m)
+WHERE n.graph_node = true
+  AND m.graph_node = true
+  AND (
+    toLower(coalesce(n.name, '') + ' ' + coalesce(n.content, '')) CONTAINS 'atlas'
+    OR toLower(coalesce(m.name, '') + ' ' + coalesce(m.content, '')) CONTAINS 'atlas'
+  )
+RETURN p
+LIMIT 25
+```
+
+Neo4j в этом демо помогает показать graph context: какие документы распались на чанки, какие сущности упоминаются в чанках и как сущности связаны между собой. Для генерации ответа используется отдельный RAG-пайплайн `query-hybrid-rerank`.

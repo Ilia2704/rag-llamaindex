@@ -2,7 +2,8 @@ import sys
 
 import requests
 
-MODEL_NAME = "hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M"
+MODEL_NAME = "hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M"
+EXPECTED_QDRANT_VERSION = "1.16.2"
 
 
 def check_ollama():
@@ -41,6 +42,16 @@ def check_qdrant():
         r = requests.get("http://localhost:6333/collections", timeout=30)
         if r.status_code == 200:  # noqa: PLR2004
             print(f"✅ OK (Коллекций: {len(r.json()['result']['collections'])})")
+            version_response = requests.get("http://localhost:6333/", timeout=30)
+            version = version_response.json().get("version")
+            if version != EXPECTED_QDRANT_VERSION:
+                print(
+                    "⚠️ Версия Qdrant отличается от qdrant-client: "
+                    f"server={version}, expected={EXPECTED_QDRANT_VERSION}"
+                )
+                print("👉 Пересоздайте контейнеры: docker compose down -v && docker compose up -d")
+                return False
+            print(f"✅ Версия Qdrant: {version}")
             return True
         print(f"❌ Ошибка: статус {r.status_code}")
         return False
