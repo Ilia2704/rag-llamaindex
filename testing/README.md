@@ -12,7 +12,7 @@ uv run python -m testing.run_ragas_demo_test
 
 По умолчанию:
 
-- target model: Ollama `hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M`;
+- target model: Ollama `hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M`;
 - evaluator: YandexGPT Lite;
 - embeddings for RAGAS: Yandex `text-embeddings/latest`;
 - Qdrant collection: `robotex_docs_llamaindex`;
@@ -28,14 +28,13 @@ uv run python -m testing.pre_deploy_test
 Ограничить прогон одной моделью:
 
 ```bash
-PREDEPLOY_MODEL_NAME=ollama-qwen3-8b-q4 uv run python -m testing.pre_deploy_test
+PREDEPLOY_MODEL_NAME=ollama-qwen3-4b-q4 uv run python -m testing.pre_deploy_test
 ```
 
 Доступные имена матрицы:
 
 - `ollama-qwen3-0.6b-q8`
 - `ollama-qwen3-4b-q4`
-- `ollama-qwen3-8b-q4`
 - `yandexgpt-lite`
 
 ## Quality gates

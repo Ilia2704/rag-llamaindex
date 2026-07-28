@@ -2,7 +2,7 @@ import sys
 
 import requests
 
-MODEL_NAME = "hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M"
+MODEL_NAME = "hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M"
 EXPECTED_QDRANT_VERSION = "1.16.2"
 
 

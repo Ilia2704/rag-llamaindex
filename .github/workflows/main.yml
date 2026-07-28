@@ -7,6 +7,9 @@ on:
     branches: ["main", "master"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   model-tests:
     runs-on: self-hosted
@@ -17,7 +20,6 @@ jobs:
         model_name:
           - ollama-qwen3-0.6b-q8
           - ollama-qwen3-4b-q4
-          - ollama-qwen3-8b-q4
           - yandexgpt-lite
 
     steps:
@@ -31,8 +33,8 @@ jobs:
         env:
           YC_API_KEY: ${{ secrets.YC_API_KEY }}
           YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
-          PROVIDER: ${{ vars.PROVIDER }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          PROVIDER: ${{ vars.PROVIDER }}
           EVAL_PROVIDER: "yandex"
           EMBEDDING_PROVIDER: "yandex"
           RAGAS_EMBEDDING_MODEL: ${{ vars.RAGAS_EMBEDDING_MODEL }}
@@ -80,7 +82,6 @@ jobs:
         env:
           YC_API_KEY: ${{ secrets.YC_API_KEY }}
           YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
-          PROVIDER: ${{ vars.PROVIDER }}
           TOX_MODEL: ${{ vars.TOX_MODEL }}
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}

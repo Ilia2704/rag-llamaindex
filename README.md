@@ -4,7 +4,7 @@
 
 ## Стек технологий
 
-*   **LLM:** Qwen3 8B Q4_K_M (через Ollama)
+*   **LLM:** Qwen3 4B Q4_K_M (через Ollama)
 *   **Vector DB:** Qdrant
 *   **Embeddings:** BAAI/bge-m3
 *   **Framework:** LangChain, LlamaIndex, uv
@@ -34,10 +34,10 @@ uv sync
 ### 3. Запуск инфраструктуры
 
 Ollama запускается локально на хосте и должна быть доступна на `http://localhost:11434`.
-Скачайте модель Qwen3 8B Q4_K_M, если она еще не установлена:
+Скачайте модель Qwen3 4B Q4_K_M, если она еще не установлена:
 
 ```bash
-ollama pull hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M
+ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M
 ```
 
 В Docker поднимаем Qdrant, MLflow и локальный Langfuse stack:
@@ -112,12 +112,12 @@ uv run python -m testing.pre_deploy_test
 Ограничить pre-deploy одной моделью:
 
 ```bash
-PREDEPLOY_MODEL_NAME=ollama-qwen3-8b-q4 uv run python -m testing.pre_deploy_test
+PREDEPLOY_MODEL_NAME=ollama-qwen3-4b-q4 uv run python -m testing.pre_deploy_test
 ```
 
 CI/CD логика лежит в `.github/workflows/main.yml` и повторяет donor-подход:
 
-- `model-tests`: self-hosted runner, матрица `ollama-qwen3-0.6b-q8`, `ollama-qwen3-4b-q4`, `ollama-qwen3-8b-q4`, `yandexgpt-lite`;
+- `model-tests`: self-hosted runner, матрица `ollama-qwen3-0.6b-q8`, `ollama-qwen3-4b-q4`, `yandexgpt-lite`;
 - `testing.pre_deploy_test`: запускает `testing.run_ragas_demo_test`, пишет метрики/артефакты в MLflow;
 - `testing.publish_model_placeholder`: после успешного прогона кладет placeholder модели в MinIO bucket Langfuse;
 - `toxicity-test`: запускает `testing.toxic_test` и валит pipeline при `ГЕЙТ: ПРОВАЛ`.
@@ -149,7 +149,7 @@ RAGAS_REFERENCE_FREE=1 uv run python -m testing.run_ragas_demo_test
 2.  **Indexing:** Настройка HNSW индекса в Qdrant вручную.
 3.  **Naive Search:** Почему простой векторный поиск находит устаревшие документы?
 4.  **Advanced Search:** Применение фильтров (`Metadata Filtering`) для отсечения неактуальной информации.
-5.  **RAG Generation:** Генерация ответа с помощью Qwen3 8B.
+5.  **RAG Generation:** Генерация ответа с помощью Qwen3 4B.
 6.  **Evaluation:** Использование паттерна "LLM-as-a-Judge" для оценки качества ответа.
 
 ---

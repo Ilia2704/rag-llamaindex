@@ -44,11 +44,6 @@ MODEL_RUNS = [
         "model": "hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M",
     },
     {
-        "name": "ollama-qwen3-8b-q4",
-        "provider": "ollama",
-        "model": "hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M",
-    },
-    {
         "name": "yandexgpt-lite",
         "provider": "yandex",
         "model": "",
@@ -162,7 +157,7 @@ def run_model_test(model_cfg: dict[str, str]) -> bool:
     env = os.environ.copy()
     env.update(
         {
-            "TARGET_PROVIDER": model_cfg["provider"],
+            "PROVIDER": model_cfg["provider"],
             "OPENAI_MODEL": model_cfg["model"],
             "EVAL_PROVIDER": (os.getenv("EVAL_PROVIDER") or "yandex").strip(),
             "EMBEDDING_PROVIDER": (os.getenv("EMBEDDING_PROVIDER") or "yandex").strip(),

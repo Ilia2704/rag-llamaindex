@@ -449,7 +449,7 @@ def log_to_mlflow(payload: dict[str, Any], report: pd.DataFrame) -> None:
 
 
 def main() -> None:
-    target_provider = _normalize_provider("TARGET_PROVIDER", "ollama")
+    target_provider = _normalize_provider("PROVIDER", "ollama")
     eval_provider = _normalize_provider("EVAL_PROVIDER", "yandex")
     embedding_provider = _normalize_provider("EMBEDDING_PROVIDER", "yandex")
 

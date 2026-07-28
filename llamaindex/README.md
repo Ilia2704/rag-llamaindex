@@ -29,7 +29,7 @@ cd /Users/newuser/Documents/repo/rag-engineering-workshop
 1. Проверьте, что Ollama запущена и модель скачана:
 
 ```bash
-ollama pull hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M
+ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M
 ```
 
 2. Поднимите Qdrant:
@@ -55,7 +55,7 @@ uv run python llamaindex/rag_llamaindex_demo.py check
 Проверяется:
 
 - `http://localhost:11434/` отвечает;
-- в Ollama есть `hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M`;
+- в Ollama есть `hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M`;
 - `http://localhost:6333/collections` отвечает.
 
 ## Проверка текущих документов
@@ -157,23 +157,23 @@ uv run python llamaindex/rag_llamaindex_demo.py demo
 
 ## Замена модели
 
-По умолчанию используется `hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M`. Можно передать другую локальную модель Ollama:
+По умолчанию используется `hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M`. Можно передать другую локальную модель Ollama:
 
 ```bash
-uv run python llamaindex/rag_llamaindex_demo.py --model llama3.1:8b query "Какие правила удаленной работы?"
+uv run python llamaindex/rag_llamaindex_demo.py --model hf.co/Qwen/Qwen3-0.6B-GGUF:Q8_0 query "Какие правила удаленной работы?"
 ```
 
 Перед этим модель должна быть скачана:
 
 ```bash
-ollama pull llama3.1:8b
+ollama pull hf.co/Qwen/Qwen3-0.6B-GGUF:Q8_0
 ```
 
 ## Как это сопоставляется с текущим LangChain notebook
 
 - `data/knowledge_base/*.md` используются те же.
 - `BAAI/bge-m3` используется та же embedding-модель.
-- `hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M` используется та же локальная генеративная модель.
+- `hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M` используется та же локальная генеративная модель.
 - Qdrant используется тот же локальный сервис.
 - Коллекция другая: `robotex_docs_llamaindex`, чтобы не пересекаться с `robotex_docs` из notebook.
 - Фильтр в LlamaIndex задается через `MetadataFilters`, а не через `qdrant_client.http.models.Filter`.
@@ -201,7 +201,7 @@ uv run python llamaindex/advanced_rag_llamaindex_demo.py index-hybrid --reset
 ### Подготовка расширенного демо
 
 ```bash
-ollama pull hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M
+ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M
 uv sync
 docker compose up -d
 ```
@@ -294,7 +294,7 @@ uv run python llamaindex/advanced_rag_llamaindex_demo.py graph-seed --reset
 - `Person`, `Team`, `Project`, `Policy`, `System`, `Technology` и другие entity-ноды;
 - связи `HAS_CHUNK`, `MENTIONS`, `OWNS`, `LEADS`, `USES`, `FOLLOWS`, `SUPERSEDES`.
 
-Граф заполняется вручную через официальный Python driver `neo4j`, а не через LlamaIndex Neo4j connector. Это сделано специально для демо: LLM-based extraction через `PropertyGraphIndex` на локальной Qwen3 8B оказался слишком долгим и нестабильным по памяти на MacBook Air M2. Ручной seed делает граф воспроизводимым: одни и те же документы дают одни и те же ноды, связи и цвета в Neo4j Browser.
+Граф заполняется вручную через официальный Python driver `neo4j`, а не через LlamaIndex Neo4j connector. Это сделано специально для демо: LLM-based extraction через `PropertyGraphIndex` на локальной Qwen3 оказался слишком долгим и нестабильным по памяти на MacBook Air M2. Ручной seed делает граф воспроизводимым: одни и те же документы дают одни и те же ноды, связи и цвета в Neo4j Browser.
 
 Проверить статистику:
 
