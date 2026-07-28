@@ -23,6 +23,8 @@ from llama_index.llms.ollama import Ollama
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
+from langfuse_observability import configure_langfuse
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data" / "knowledge_base"
@@ -200,11 +202,13 @@ def check_qdrant() -> bool:
 def configure_settings(
     model: str = LLM_MODEL,
     request_timeout: float = LLM_REQUEST_TIMEOUT,
+    trace_name: str = "llamaindex-rag",
 ) -> None:
     device = select_device()
     print(f"Embedding model: {EMBEDDING_MODEL} on {device}")
     print(f"LLM via LlamaIndex: {model} at {OLLAMA_URL}")
     print(f"LLM request timeout: {request_timeout:.0f}s")
+    configure_langfuse(trace_name)
 
     # Settings задает основные LlamaIndex-компоненты для текущего процесса.
     Settings.llm = Ollama(
@@ -239,7 +243,7 @@ def build_index(
     reset: bool = False,
     model: str = LLM_MODEL,
 ) -> VectorStoreIndex | None:
-    configure_settings(model)
+    configure_settings(model, trace_name="llamaindex-rag-index")
     client = qdrant_client()
 
     if collection_exists(client, collection_name):
@@ -327,7 +331,7 @@ def load_index(
     collection_name: str = COLLECTION_NAME,
     model: str = LLM_MODEL,
 ) -> VectorStoreIndex:
-    configure_settings(model)
+    configure_settings(model, trace_name="llamaindex-rag-query")
     client = qdrant_client()
 
     if not collection_exists(client, collection_name):

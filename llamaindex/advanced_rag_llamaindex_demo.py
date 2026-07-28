@@ -290,7 +290,7 @@ def build_hybrid_index(
     reset: bool = False,
     model: str = LLM_MODEL,
 ) -> VectorStoreIndex:
-    configure_settings(model)
+    configure_settings(model, trace_name="llamaindex-advanced-rag-index")
     client = QdrantClient(url=QDRANT_URL)
 
     if client.collection_exists(collection_name):
@@ -321,7 +321,7 @@ def load_hybrid_index(
     collection_name: str = HYBRID_COLLECTION,
     model: str = LLM_MODEL,
 ) -> VectorStoreIndex:
-    configure_settings(model)
+    configure_settings(model, trace_name="llamaindex-advanced-rag-query")
     if not collection_exists(collection_name):
         raise RuntimeError(
             f"Коллекция {collection_name!r} не найдена. "

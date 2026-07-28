@@ -8,6 +8,8 @@
 *   **Vector DB:** Qdrant
 *   **Embeddings:** BAAI/bge-m3
 *   **Framework:** LangChain, LlamaIndex, uv
+*   **Evaluation:** RAGAS, MLflow
+*   **Observability:** Langfuse
 
 ## Быстрый старт
 
@@ -38,13 +40,14 @@ Ollama запускается локально на хосте и должна �
 ollama pull hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M
 ```
 
-В Docker поднимаем только Qdrant:
+В Docker поднимаем Qdrant, MLflow и локальный Langfuse stack:
 
 ```bash
 docker compose up -d
 ```
 
 Версия Qdrant закреплена как `qdrant/qdrant:v1.16.2`, чтобы совпадать с `qdrant-client==1.16.2`.
+MLflow доступен на `http://localhost:5001`, Langfuse - на `http://localhost:3000`.
 
 Проверьте, что все сервисы доступны:
 ```bash
@@ -80,6 +83,65 @@ uv run python llamaindex/advanced_rag_llamaindex_demo.py rerank "Кто отве
 ```
 
 Подробная инструкция: `llamaindex/README.md`.
+
+### 7. RAGAS/MLflow/Langfuse тестирование
+
+Заполните `.env`:
+
+```text
+YC_API_KEY=<yandex cloud api key>
+YC_FOLDER_ID=<yandex cloud folder id>
+LANGFUSE_PUBLIC_KEY=<langfuse public key>
+LANGFUSE_SECRET_KEY=<langfuse secret key>
+```
+
+Минимальный локальный запуск RAGAS quality gate:
+
+```bash
+uv sync
+docker compose up -d
+uv run python -m testing.run_ragas_demo_test
+```
+
+Pre-deploy suite с матрицей моделей и MLflow-логированием:
+
+```bash
+uv run python -m testing.pre_deploy_test
+```
+
+Ограничить pre-deploy одной моделью:
+
+```bash
+PREDEPLOY_MODEL_NAME=ollama-qwen3-8b-q4 uv run python -m testing.pre_deploy_test
+```
+
+CI/CD логика лежит в `.github/workflows/main.yml` и повторяет donor-подход:
+
+- `model-tests`: self-hosted runner, матрица `ollama-qwen3-0.6b-q8`, `ollama-qwen3-4b-q4`, `ollama-qwen3-8b-q4`, `yandexgpt-lite`;
+- `testing.pre_deploy_test`: запускает `testing.run_ragas_demo_test`, пишет метрики/артефакты в MLflow;
+- `testing.publish_model_placeholder`: после успешного прогона кладет placeholder модели в MinIO bucket Langfuse;
+- `toxicity-test`: запускает `testing.toxic_test` и валит pipeline при `ГЕЙТ: ПРОВАЛ`.
+
+Основные параметры quality gate:
+
+```text
+THRESH_FAITHFULNESS=0.80
+THRESH_CONTEXT_RELEVANCE=0.50
+THRESH_ANSWER_RELEVANCY=0.50
+THRESH_CONTEXT_PRECISION=0.50
+THRESH_CONTEXT_RECALL=0.70
+THRESH_QA_SIM=0.80
+```
+
+RAGAS-кейсы используют текущую базу знаний `data/knowledge_base`, а не данные из архива. Если Qdrant collection `robotex_docs_llamaindex` еще не создана, тест соберет ее из текущих markdown-документов без изменения файлов в `data`.
+
+Для оценки без эталонных ответов включите reference-free режим:
+
+```bash
+RAGAS_REFERENCE_FREE=1 uv run python -m testing.run_ragas_demo_test
+```
+
+Он проверяет `faithfulness`, `context_relevance` и `answer_relevancy`, а метрики, зависящие от `ground_truth`, пропускает.
 
 ## Сценарий практики
 
