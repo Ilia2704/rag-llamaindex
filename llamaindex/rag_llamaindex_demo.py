@@ -203,12 +203,15 @@ def configure_settings(
     model: str = LLM_MODEL,
     request_timeout: float = LLM_REQUEST_TIMEOUT,
     trace_name: str = "llamaindex-rag",
+    *,
+    enable_tracing: bool = True,
 ) -> None:
     device = select_device()
     print(f"Embedding model: {EMBEDDING_MODEL} on {device}")
     print(f"LLM via LlamaIndex: {model} at {OLLAMA_URL}")
     print(f"LLM request timeout: {request_timeout:.0f}s")
-    configure_langfuse(trace_name)
+    if enable_tracing:
+        configure_langfuse(trace_name)
 
     # Settings задает основные LlamaIndex-компоненты для текущего процесса.
     Settings.llm = Ollama(

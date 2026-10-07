@@ -1,0 +1,8 @@
+Задача,Способ,Top-3 источники,Целевой источник,Ранг в top-3,Hit@3,MRR@3,Precision@3,Recall@3,"Время, мс"
+VPN: допустимость ежедневного использования,1. Dense без фильтра,Doc_Filler_7.md → Doc_Filler_19.md → Doc_Filler_5.md,IT_Zero_Trust_2026.md,,0,0.0,0.0,0.0,614.0
+VPN: допустимость ежедневного использования,2. Dense + year=2026,Doc_Filler_7.md → Doc_Filler_19.md → Doc_Filler_5.md,IT_Zero_Trust_2026.md,,0,0.0,0.0,0.0,59.5
+VPN: допустимость ежедневного использования,3. Hybrid + year=2026,Doc_Filler_7.md → Doc_Filler_19.md → Doc_Filler_14.md,IT_Zero_Trust_2026.md,,0,0.0,0.0,0.0,47.9
+VPN: допустимость ежедневного использования,4. Hybrid + фильтр + rerank,IT_Zero_Trust_2026.md → Doc_Filler_7.md → Doc_Filler_14.md,IT_Zero_Trust_2026.md,1.0,1,1.0,0.3333333333333333,1.0,392.9
+ZTA-17: ответственный из истории,"5. Hybrid + фильтр, без rewrite",Doc_Filler_23.md → Project_Red_Eye.md → Meeting_Atlas_Security_2026.md,IT_Zero_Trust_2026.md,,0,0.0,0.0,0.0,88.6
+ZTA-17: ответственный из истории,6. Rewrite + hybrid + фильтр,IT_Zero_Trust_2026.md → Project_Atlas_Graph_2026.md → Project_Red_Eye.md,IT_Zero_Trust_2026.md,1.0,1,1.0,0.3333333333333333,1.0,13681.2
+ZTA-17: ответственный из истории,7. Rewrite + hybrid + фильтр + rerank,IT_Zero_Trust_2026.md → Project_Atlas_Graph_2026.md → Doc_Filler_17.md,IT_Zero_Trust_2026.md,1.0,1,1.0,0.3333333333333333,1.0,11794.5

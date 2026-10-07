@@ -1,0 +1,43 @@
+КОМАНДЫ ДЛЯ ДЕМО РЕРАНКИНГА
+Выполнять в терминале из корня проекта.
+Ollama, модель Qwen3 0.6B и Qdrant уже прошли проверку.
+Проверка показала одну коллекцию, но не её имя: наличие hybrid-индекса пока не подтверждено.
+
+1. Перейти в корень проекта:
+
+cd /Users/newuser/Documents/repo/rag-engineering-workshop
+
+2. Создать hybrid-индекс, если его ещё нет:
+Существующая коллекция robotex_docs_llamaindex_hybrid используется повторно.
+
+uv run python llamaindex/advanced_rag_llamaindex_demo.py --model hf.co/Qwen/Qwen3-0.6B-GGUF:Q8_0 index-hybrid
+
+3. Показать только реранкинг: top-8 до и top-3 после, без генерации ответа:
+
+uv run python llamaindex/advanced_rag_llamaindex_demo.py --model hf.co/Qwen/Qwen3-0.6B-GGUF:Q8_0 rerank "Можно ли пользоваться VPN для обычной ежедневной работы, а не только при аварии?"
+
+4. Полное учебное демо: Query Rewriting, затем реранкинг с диагностикой рангов:
+
+uv run python llamaindex/advanced_rag_llamaindex_demo.py --model hf.co/Qwen/Qwen3-0.6B-GGUF:Q8_0 lecture-demo
+
+5. Дополнительно: полный RAG с ответом LLM и источниками:
+
+uv run python llamaindex/advanced_rag_llamaindex_demo.py --model hf.co/Qwen/Qwen3-0.6B-GGUF:Q8_0 query-hybrid-rerank "Можно ли пользоваться VPN для обычной ежедневной работы, а не только при аварии?"
+
+ПЕРЕД ЗАНЯТИЕМ
+Один раз выполните пункт 4, чтобы модели скачались и попали в локальный кеш.
+Ожидаемый источник для вопроса про VPN: IT_Zero_Trust_2026.md.
+Ранги могут отличаться между запусками; улучшение не гарантируется.
+
+ПЕРЕСБОРКА ПОСЛЕ ИЗМЕНЕНИЯ ДОКУМЕНТОВ (ТОЛЬКО ПРИ НЕОБХОДИМОСТИ)
+Следующая команда удаляет и заново создаёт hybrid-коллекцию по текущим файлам data/knowledge_base:
+
+uv run python llamaindex/advanced_rag_llamaindex_demo.py --model hf.co/Qwen/Qwen3-0.6B-GGUF:Q8_0 index-hybrid --reset
+
+ЕСЛИ ПОЗЖЕ QDRANT БУДЕТ ОСТАНОВЛЕН
+
+docker compose up -d qdrant
+
+ПОВТОРНАЯ ПРОВЕРКА СЕРВИСОВ
+
+uv run python llamaindex/rag_llamaindex_demo.py --model hf.co/Qwen/Qwen3-0.6B-GGUF:Q8_0 check

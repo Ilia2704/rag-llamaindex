@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
-from typing import Iterable
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Iterable
 
 from llama_index.core import StorageContext, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
@@ -13,6 +17,7 @@ from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.schema import NodeWithScore
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
+from llama_index.llms.ollama import Ollama
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import AsyncQdrantClient, QdrantClient
 
@@ -21,6 +26,8 @@ from rag_llamaindex_demo import (
     CHUNK_SIZE,
     EMBEDDING_MODEL,
     LLM_MODEL,
+    LLM_REQUEST_TIMEOUT,
+    OLLAMA_URL,
     QA_TEMPLATE,
     QDRANT_URL,
     check_ollama,
@@ -35,6 +42,9 @@ from rag_llamaindex_demo import (
 
 HYBRID_COLLECTION = "robotex_docs_llamaindex_hybrid"
 RERANK_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+REWRITE_MODEL = "hf.co/Qwen/Qwen3-0.6B-GGUF:Q8_0"
+LECTURE_RERANK_QUESTION = "Можно ли пользоваться VPN для обычной ежедневной работы, а не только при аварии?"
+LECTURE_RERANK_TARGET = "IT_Zero_Trust_2026.md"
 SPARSE_MODEL = "Qdrant/bm25"
 NEO4J_URL = os.getenv("NEO4J_URL", "bolt://localhost:7687")
 NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
@@ -320,8 +330,11 @@ def load_hybrid_index(
     *,
     collection_name: str = HYBRID_COLLECTION,
     model: str = LLM_MODEL,
+    enable_tracing: bool = True,
 ) -> VectorStoreIndex:
-    configure_settings(model, trace_name="llamaindex-advanced-rag-query")
+    configure_settings(
+        model, trace_name="llamaindex-advanced-rag-query", enable_tracing=enable_tracing
+    )
     if not collection_exists(collection_name):
         raise RuntimeError(
             f"Коллекция {collection_name!r} не найдена. "
@@ -403,19 +416,193 @@ def rerank_search(
     top_n: int = 3,
 ) -> list[NodeWithScore]:
     index = load_hybrid_index(collection_name=collection_name, model=model)
-    candidates = retrieve_nodes(query=query, index=index, top_k=8, year=2026, hybrid=True)
-    print_nodes("До Cross-Encoder Reranking: top-8 кандидатов из hybrid retrieval", candidates)
-
-    # SentenceTransformerRerank вызывает cross-encoder и переставляет кандидатов.
-    reranker = SentenceTransformerRerank(
-        model=RERANK_MODEL,
-        top_n=top_n,
-        device=select_device(),
-        keep_retrieval_score=True,
+    result = rerank_nodes(
+        query=query, index=index, top_n=top_n,
+        on_candidates=lambda nodes: print_lecture_nodes("До Cross-Encoder Reranking: top-8", nodes),
     )
-    reranked = reranker.postprocess_nodes(candidates, query_str=query)
-    print_nodes(f"После Cross-Encoder Reranking: top-{top_n}", reranked)
-    return reranked
+    print_lecture_nodes(
+        f"После Cross-Encoder Reranking: top-{top_n}", result.reranked,
+        score_label="rerank_score",
+    )
+    return result.reranked
+
+
+@dataclass
+class RerankResult:
+    candidates: list[NodeWithScore]
+    reranked: list[NodeWithScore]
+    retrieval_scores: dict[str, float | None]
+    retrieval_ms: float
+    rerank_ms: float
+
+
+def rerank_nodes(
+    *, query: str, index: VectorStoreIndex, candidate_k: int = 8,
+    top_n: int = 3, year: int = 2026,
+    on_candidates: Callable[[list[NodeWithScore]], None] | None = None,
+) -> RerankResult:
+    started = time.perf_counter()
+    candidates = retrieve_nodes(
+        query=query, index=index, top_k=candidate_k, year=year, hybrid=True,
+    )
+    retrieval_ms = (time.perf_counter() - started) * 1000
+    retrieval_scores = {item.node.node_id: item.score for item in candidates}
+    if on_candidates is not None:
+        on_candidates(candidates)
+    # Reranker mutates NodeWithScore.score; preserve the original wrappers/order.
+    rerank_input = [NodeWithScore(node=item.node, score=retrieval_scores[item.node.node_id]) for item in candidates]
+    started = time.perf_counter()
+    reranker = SentenceTransformerRerank(
+        model=RERANK_MODEL, top_n=top_n, device=select_device(),
+        keep_retrieval_score=False,
+    )
+    reranked = reranker.postprocess_nodes(rerank_input, query_str=query)
+    rerank_ms = (time.perf_counter() - started) * 1000
+    return RerankResult(candidates, reranked, retrieval_scores, retrieval_ms, rerank_ms)
+
+
+def clean_rewritten_query(response: str) -> str:
+    # Ignore reasoning before looking for query tags, including tags quoted in reasoning.
+    response = re.sub(r"<think\b[^>]*>.*?</think\s*>", "", response,
+                      flags=re.DOTALL | re.IGNORECASE)
+    # Some GGUF templates emit reasoning without an opening <think> tag.
+    response = re.split(r"</think\s*>", response, flags=re.IGNORECASE)[-1]
+    response = re.sub(r"<think\b[^>]*>.*$", "", response, flags=re.DOTALL | re.IGNORECASE)
+    match = re.search(r"<query\b[^>]*>(.*?)</query\s*>", response,
+                      flags=re.DOTALL | re.IGNORECASE)
+    value = match.group(1) if match else response
+    value = value.strip().strip('"\'«»“”‘’').strip()
+    value = re.sub(r"^(?:Переписанный запрос|Запрос)\s*:\s*", "", value,
+                   flags=re.IGNORECASE)
+    value = value.strip().strip('"\'«»“”‘’').strip()
+    if not value:
+        raise RuntimeError("Qwen3 вернула пустой поисковый запрос после очистки.")
+    return value
+
+
+def rewrite_query(query: str, history: str, *, model: str = REWRITE_MODEL) -> str:
+    prompt = f"""Переформулируй последний вопрос в самостоятельный поисковый запрос. Вставь тему из истории вместо местоимения. Смысл вопроса не меняй. Не отвечай на вопрос. Не придумывай факты. Верни только <query>самостоятельный вопрос</query>.
+
+История:
+{history}
+
+Последний запрос:
+{query}
+/no_think"""
+    llm = Ollama(
+        model=model, base_url=OLLAMA_URL, temperature=0,
+        request_timeout=LLM_REQUEST_TIMEOUT, thinking=False,
+    )
+    return clean_rewritten_query(llm.complete(prompt).text)
+
+
+def source_filename(item: NodeWithScore) -> str:
+    metadata = item.node.metadata
+    return Path(str(metadata.get("filename") or metadata.get("source") or "unknown")).name
+
+
+def rank_of_source(nodes: Iterable[NodeWithScore], filename: str) -> int | None:
+    return next((rank for rank, item in enumerate(nodes, 1)
+                 if source_filename(item) == filename), None)
+
+
+def print_lecture_nodes(
+    title: str, nodes: Iterable[NodeWithScore], *, score_label: str = "retrieval_score",
+) -> None:
+    print(f"\n=== {title} ===")
+    for rank, item in enumerate(nodes, 1):
+        score = "n/a" if item.score is None else f"{item.score:.4f}"
+        text = " ".join(item.node.get_content(metadata_mode="none").split())
+        print(f"#{rank} {score_label}={score} {source_filename(item)}")
+        print(f"    {text[:220]}")
+
+
+def lecture_demo(
+    *, collection_name: str = HYBRID_COLLECTION, model: str = REWRITE_MODEL,
+    history: str = "До этого мы обсуждали стандарт доступа ZTA-17 для инженерных сервисов.",
+    rewrite_question: str = "А кто за это отвечает?",
+    rerank_question: str = LECTURE_RERANK_QUESTION,
+    rerank_target: str = LECTURE_RERANK_TARGET,
+    top_k: int = 8, top_n: int = 3,
+) -> None:
+    if not 1 <= top_n <= top_k:
+        raise ValueError("Требуется 1 <= top_n <= top_k.")
+    if not check_ollama(model) or not check_qdrant():
+        raise RuntimeError("Для lecture-demo нужны локальные Ollama с моделью и Qdrant.")
+    index = load_hybrid_index(collection_name=collection_name, model=model, enable_tracing=False)
+    print("\n================================================\nPART 1. QUERY REWRITING\n================================================")
+    print(f"История: {history}\nИсходный запрос: {rewrite_question}")
+    started = time.perf_counter()
+    raw = retrieve_nodes(query=rewrite_question, index=index, top_k=5, year=2026, hybrid=True)
+    raw_ms = (time.perf_counter() - started) * 1000
+    print_lecture_nodes("Исходный запрос: top-5", raw)
+    print(f"\nQuery rewriting через Ollama: {model}")
+    started = time.perf_counter()
+    rewritten = rewrite_query(rewrite_question, history, model=model)
+    rewrite_ms = (time.perf_counter() - started) * 1000
+    print(f"\n=== Переписанный запрос ===\nИсходный: {rewrite_question}\nПереписанный: {rewritten}")
+    started = time.perf_counter()
+    after = retrieve_nodes(query=rewritten, index=index, top_k=5, year=2026, hybrid=True)
+    after_ms = (time.perf_counter() - started) * 1000
+    print_lecture_nodes("Поиск после rewrite: top-5", after)
+    target = "IT_Zero_Trust_2026.md"
+    print(f"\nОжидаемый источник: {target}")
+    print(f"Rank до rewrite: {rank_of_source(raw, target) or 'not in top-5'}")
+    print(f"Rank после rewrite: {rank_of_source(after, target) or 'not in top-5'}")
+    print(f"raw retrieval: {raw_ms:.0f} ms\nquery rewriting: {rewrite_ms:.0f} ms\nrewritten retrieval: {after_ms:.0f} ms")
+    print("\n================================================\nPART 2. RETRIEVE MANY -> RERANK -> KEEP FEW\n================================================")
+    print(f"Запрос: {rerank_question}\nHybrid top-{top_k} -> Cross-Encoder -> top-{top_n}")
+    print(f"Cross-Encoder: {RERANK_MODEL}. Первый запуск может включать загрузку модели.")
+    result = rerank_nodes(
+        query=rerank_question, index=index, candidate_k=top_k, top_n=top_n,
+        on_candidates=lambda nodes: print_lecture_nodes(f"До reranking: {len(nodes)} кандидатов", nodes),
+    )
+    print_lecture_nodes(f"После reranking: {len(result.reranked)} результатов", result.reranked, score_label="rerank_score")
+    print(f"\nОжидаемый источник: {rerank_target}")
+    before_rank = rank_of_source(result.candidates, rerank_target)
+    after_rank = rank_of_source(result.reranked, rerank_target)
+    print(f"Rank до reranking: {before_rank or f'not in top-{top_k}'}")
+    print(f"Rank после reranking: {after_rank or f'not in top-{top_n}'}")
+    before_kept = before_rank is not None and before_rank <= top_n
+    print(f"В исходном top-{top_n}: {'да' if before_kept else 'нет'}")
+    print(f"В итоговом top-{top_n}: {'да' if after_rank is not None else 'нет'}")
+    if before_rank is not None and not before_kept and after_rank is not None:
+        print(
+            f"Если бы retrieval вернул только top-{top_n}, нужный источник был бы потерян. "
+            f"Top-{top_k} сохранил его, reranker вернул в top-{top_n}."
+        )
+    if before_rank is not None and after_rank is not None and after_rank < before_rank:
+        print(f"Нужный документ поднялся: #{before_rank} -> #{after_rank}.")
+    elif before_rank is None:
+        print("Нужного документа нет среди кандидатов: reranker не может его найти.")
+    else:
+        print("Улучшение ранга в этом запуске не наблюдается.")
+
+    filenames = dict.fromkeys(
+        [rerank_target]
+        + [source_filename(item) for item in result.candidates[:top_n]]
+        + [source_filename(item) for item in result.reranked]
+    )
+    print(f"\n{'source':40} {'before':>15} {'after':>15}")
+    for filename in filenames:
+        before = rank_of_source(result.candidates, filename)
+        after = rank_of_source(result.reranked, filename)
+        print(f"{filename:40} {str(before or f'not in top-{top_k}'):>15} {str(after or f'not in top-{top_n}'):>15}")
+
+    evidence = next(
+        (item for item in result.candidates if source_filename(item) == rerank_target),
+        None,
+    )
+    if evidence is not None:
+        print(f"\n=== Проверка по тексту источника: {rerank_target} ===")
+        print(evidence.node.get_content(metadata_mode="none")[:1200])
+    print("\nretrieval_score и rerank_score — разные оценки; их величины нельзя сравнивать напрямую.")
+    print(f"hybrid retrieval top-{top_k}: {result.retrieval_ms:.0f} ms\ncross-encoder reranking (включая загрузку): {result.rerank_ms:.0f} ms")
+    print("\n=== Что показал стенд ===\n"
+          "1. Контекстный запрос можно улучшить ДО retrieval через Query Rewriting.\n"
+          "2. Retriever сначала достает широкий набор кандидатов для recall.\n"
+          "3. Cross-Encoder пересортировывает только shortlist для precision.\n"
+          "4. Если документа нет среди initial candidates, reranker его найти не сможет.")
 
 
 def query_hybrid_rerank(
@@ -830,7 +1017,7 @@ def check_all(model: str = LLM_MODEL) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Advanced LlamaIndex RAG demo.")
-    parser.add_argument("--model", default=LLM_MODEL)
+    parser.add_argument("--model", default=None)
     parser.add_argument("--collection", default=HYBRID_COLLECTION)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -852,6 +1039,14 @@ def parse_args() -> argparse.Namespace:
     query_parser = subparsers.add_parser("query-hybrid-rerank", help="RAG: hybrid retrieval + rerank + LLM.")
     query_parser.add_argument("question")
 
+    lecture_parser = subparsers.add_parser("lecture-demo", help="Демо Query Rewriting + Cross-Encoder Reranking.")
+    lecture_parser.add_argument("--history", default="До этого мы обсуждали стандарт доступа ZTA-17 для инженерных сервисов.")
+    lecture_parser.add_argument("--rewrite-question", default="А кто за это отвечает?")
+    lecture_parser.add_argument("--rerank-question", default=LECTURE_RERANK_QUESTION)
+    lecture_parser.add_argument("--rerank-target", default=LECTURE_RERANK_TARGET, help="Ожидаемый источник для диагностики; не влияет на поиск и reranking.")
+    lecture_parser.add_argument("--top-k", type=int, default=8, help="Число кандидатов для reranking; rewrite всегда top-5.")
+    lecture_parser.add_argument("--top-n", type=int, default=3)
+
     graph_seed_parser = subparsers.add_parser("graph-seed", help="Быстро заполнить Neo4j ручным graph seed.")
     graph_seed_parser.add_argument("--reset", action="store_true")
 
@@ -860,12 +1055,25 @@ def parse_args() -> argparse.Namespace:
 
     subparsers.add_parser("graph-stats", help="Показать количество graph nodes/relationships.")
     subparsers.add_parser("graph-check", help="Проверить Neo4j.")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.model is None:
+        args.model = REWRITE_MODEL if args.command == "lecture-demo" else LLM_MODEL
+    if args.command == "lecture-demo" and not 1 <= args.top_n <= args.top_k:
+        parser.error("Требуется 1 <= --top-n <= --top-k.")
+    return args
 
 
 def main() -> int:
     args = parse_args()
 
+    if args.command == "lecture-demo":
+        lecture_demo(
+            collection_name=args.collection, model=args.model, history=args.history,
+            rewrite_question=args.rewrite_question, rerank_question=args.rerank_question,
+            rerank_target=args.rerank_target,
+            top_k=args.top_k, top_n=args.top_n,
+        )
+        return 0
     if args.command == "check":
         return check_all(args.model)
     if args.command == "index-hybrid":
