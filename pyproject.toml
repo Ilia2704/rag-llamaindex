@@ -10,6 +10,7 @@ dependencies = [
     "ipywidgets>=8.1.8",
     "jupyterlab>=4.5.3",
     "langchain>=1.2.7",
+    "langgraph>=1.0.7,<2",
     "langchain-community>=0.4.1",
     "langchain-huggingface>=1.2.0",
     "langchain-ollama>=1.0.1",

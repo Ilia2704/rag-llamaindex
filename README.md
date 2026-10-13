@@ -154,3 +154,31 @@ RAGAS_REFERENCE_FREE=1 uv run python -m testing.run_ragas_demo_test
 
 ---
 Автор: Виталий Бабчук
+
+## Tool calling и структурированный вывод
+
+Отдельное минимальное демо с двумя локальными инструментами, Pydantic-валидацией,
+ограниченным repair loop и вертикальным trace вызовов:
+
+```bash
+uv run python -m agentic.toolcalling.demo
+```
+
+Требуется только локальная Ollama с `hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M`
+(та же модель, что в основном RAG-демо).
+Архитектура, сценарии ошибок и параметры: [agentic/toolcalling/README.md](agentic/toolcalling/README.md).
+
+## Мультиагентный онбординг Atlas
+
+Общий агентский сценарий объединяет проверку ноутбука, поиск сведений о проекте
+и требований доступа. Планировщик делегирует три задачи, критик проверяет
+результаты и может повторить конкретную задачу:
+
+```bash
+uv run python -m agentic.multiagent.demo --inject-invalid-args --inject-critic-error
+```
+
+По умолчанию нужны только Ollama и исходные документы, Qdrant опционален.
+Оба агентских демо поддерживают `--langfuse` с отдельными именами trace и
+продолжают работу без запущенного Langfuse.
+[Архитектура и команды](agentic/README.md).
