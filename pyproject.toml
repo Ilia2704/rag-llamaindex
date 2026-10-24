@@ -33,6 +33,11 @@ dependencies = [
     "requests>=2.32.5",
     "sentence-transformers>=5.2.0",
     "tqdm>=4.67.1",
+    "torch==2.8.0",
+    "torchvision==0.23.0",
+    "transformers==4.57.6",
+    "matplotlib==3.10.8",
+    "pip==26.1.2",
 ]
 
 [tool.ruff]
