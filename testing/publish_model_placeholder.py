@@ -53,7 +53,7 @@ def main() -> None:
                 "/bin/sh",
                 "-v",
                 f"{tmp_path}:/artifacts",
-                "minio/mc:latest",
+                "pgsty/mc:latest",
                 "-lc",
                 (
                     f"mc alias set local {minio_endpoint} {minio_user} {minio_password} >/dev/null && "

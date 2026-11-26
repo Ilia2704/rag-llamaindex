@@ -120,7 +120,7 @@ services:
     restart: unless-stopped
 
   langfuse-minio:
-    image: minio/minio:latest
+    image: pgsty/silo:latest
     container_name: langfuse-minio
     command: server /data --console-address ":9001"
     environment:
@@ -140,7 +140,7 @@ services:
     restart: unless-stopped
 
   langfuse-minio-init:
-    image: minio/mc:latest
+    image: pgsty/mc:latest
     container_name: langfuse-minio-init
     depends_on:
       langfuse-minio:
